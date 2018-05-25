@@ -132,62 +132,226 @@ import           Text.ParserCombinators.ReadPrec
 
 data Either a b = Either (# a | b #)
 
+-- | The 'Left' pattern synonym mimics the functionality of base's 'Data.Either.Left' constructor
 pattern Left :: a -> Either a b
 pattern Left a = Either (# a | #)
 
+-- | The 'Right' pattern synonym mimics the functionality of base's 'Data.Either.Right' constructor
 pattern Right :: b -> Either a b
 pattern Right b = Either (# | b #)
 
 {-# COMPLETE Left, Right #-}
 
+-- | This is the same as 'Left'.
 left :: a -> Either a b
 left a = Either (# a | #)
 {-# INLINE left #-}
 
+-- | This is the same as 'Right'.
 right :: b -> Either a b
 right b = Either (# | b #)
 {-# INLINE right #-}
 
+-- | Case analysis for the 'Either' type.
+-- If the value is @'Left' a@, apply the first function to @a@;
+-- if it is @'Right' b@, apply the second function to @b@.
+--
+-- ==== __Examples__
+--
+-- We create two values of type @'Either' 'String' 'Int'@, one using the
+-- 'Left' constructor and another using the 'Right' constructor. Then
+-- we apply \"either\" the 'length' function (if we have a 'String')
+-- or the \"times-two\" function (if we have an 'Int'):
+--
+-- >>> let s = Left "foo" :: Either String Int
+-- >>> let n = Right 3 :: Either String Int
+-- >>> either length (*2) s
+-- 3
+-- >>> either length (*2) n
+-- 6
+--
 either :: (a -> c) -> (b -> c) -> Either a b -> c
 either fa fb (Either x) = case x of
   (# a | #) -> fa a
   (# | b #) -> fb b
 {-# INLINE either #-}
 
+-- | Return `True` if the given value is a `Left`-value, `False` otherwise.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> isLeft (Left "foo")
+-- True
+-- >>> isLeft (Right 3)
+-- False
+--
+-- Assuming a 'Left' value signifies some sort of error, we can use
+-- 'isLeft' to write a very simple error-reporting function that does
+-- absolutely nothing in the case of success, and outputs \"ERROR\" if
+-- any error occurred.
+--
+-- This example shows how 'isLeft' might be used to avoid pattern
+-- matching when one does not care about the value contained in the
+-- constructor:
+--
+-- >>> import Control.Monad ( when )
+-- >>> let report e = when (isLeft e) $ putStrLn "ERROR"
+-- >>> report (Right 1)
+-- >>> report (Left "parse error")
+-- ERROR
+--
 isLeft :: Either a b -> Bool
 isLeft = either (const True) (const False)
 {-# INLINE isLeft #-}
 
+-- | Return `True` if the given value is a `Right`-value, `False` otherwise.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> isRight (Left "foo")
+-- False
+-- >>> isRight (Right 3)
+-- True
+--
+-- Assuming a 'Left' value signifies some sort of error, we can use
+-- 'isRight' to write a very simple reporting function that only
+-- outputs \"SUCCESS\" when a computation has succeeded.
+--
+-- This example shows how 'isRight' might be used to avoid pattern
+-- matching when one does not care about the value contained in the
+-- constructor:
+--
+-- >>> import Control.Monad ( when )
+-- >>> let report e = when (isRight e) $ putStrLn "SUCCESS"
+-- >>> report (Left "parse error")
+-- >>> report (Right 1)
+-- SUCCESS
+--
 isRight :: Either a b -> Bool
 isRight = either (const False) (const True)
 {-# INLINE isRight #-}
 
+-- | Extracts from a list of 'Either' all the 'Left' elements.
+-- All the 'Left' elements are extracted in order.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> let list = [ Left "foo", Right 3, Left "bar", Right 7, Left "baz" ]
+-- >>> lefts list
+-- ["foo","bar","baz"]
+--
 lefts :: [Either a b] -> [a]
 lefts x = [a | Left a <- x]
 {-# INLINEABLE lefts #-}
 
+-- | Extracts from a list of 'Either' all the 'Right' elements.
+-- All the 'Right' elements are extracted in order.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> let list = [ Left "foo", Right 3, Left "bar", Right 7, Left "baz" ]
+-- >>> rights list
+-- [3,7]
+--
 rights :: [Either a b] -> [b]
 rights x = [b | Right b <- x]
 {-# INLINEABLE rights #-}
 
+-- | Partitions a list of 'Either' into two lists.
+-- All the 'Left' elements are extracted, in order, to the first
+-- component of the output.  Similarly the 'Right' elements are extracted
+-- to the second component of the output.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> let list = [ Left "foo", Right 3, Left "bar", Right 7, Left "baz" ]
+-- >>> partitionEithers list
+-- (["foo","bar","baz"],[3,7])
+--
+-- The pair returned by @'partitionEithers' x@ should be the same
+-- pair as @('lefts' x, 'rights' x)@:
+--
+-- >>> let list = [ Left "foo", Right 3, Left "bar", Right 7, Left "baz" ]
+-- >>> partitionEithers list == (lefts list, rights list)
+-- True
+--
 partitionEithers :: [Either a b] -> ([a], [b])
 partitionEithers = foldr' (either l r) ([],[])
   where
     l a (lft, rgt) = (a:lft, rgt)
     r a (lft, rgt) = (lft, a:rgt)
 
+-- | Return the contents of a 'Left'-value or a default value otherwise.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> fromLeft 1 (Left 3)
+-- 3
+-- >>> fromLeft 1 (Right "foo")
+-- 1
+--
 fromLeft :: a -> Either a b -> a
 fromLeft def = either id (const def)
 {-# INLINE fromLeft #-}
 
+-- | Return the contents of a 'Right'-value or a default value otherwise.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> fromRight 1 (Right 3)
+-- 3
+-- >>> fromRight 1 (Left "foo")
+-- 1
+--
 fromRight :: b -> Either a b -> b
 fromRight def = either (const def) id
 {-# INLINE fromRight #-}
 
+-- | The 'fromBaseEither' function converts base's 'Data.Either.Either' to a
+--   'Data.Either.Unpacked.Either'. This function is good for using
+--   existing functions that return base's 'Data.Either.Either' values.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> import Text.Read ( readEither )
+-- >>> let parse = fromBaseEither . readEither :: String -> Either String Int
+-- >>> parse "3"
+-- Right 3
+-- >>> parse ""
+-- Left "Prelude.read: no parse"
+--
 fromBaseEither :: BaseEither.Either a b -> Either a b
 fromBaseEither (BaseEither.Left  a) = left a
 fromBaseEither (BaseEither.Right b) = right b
 
+-- | The 'toBaseEither' function converts an 'Either' value to a
+--   value of base's 'Data.Either.Either' type.
+--
+-- ==== __Examples__
+--
+-- Basic usage:
+--
+-- >>> import Data.List (unfoldr)
+-- >>> let ana n = if n == 5 then (left "stop here") else right (n+1,n+1)
+-- >>> unfoldr (toBaseMaybe . ana) 0
+-- [1,2,3,4,5]
+--
 toBaseEither :: Either a b -> BaseEither.Either a b
 toBaseEither (Left  a) = BaseEither.Left a
 toBaseEither (Right b) = BaseEither.Right b
