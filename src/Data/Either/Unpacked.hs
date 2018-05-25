@@ -118,7 +118,7 @@ import qualified Data.Either         as BaseEither
 import           Data.Monoid         (Monoid(mempty,mappend))
 import           Data.Ord            (Ord(compare, (>=)), Ordering(GT, LT))
 import           Data.Semigroup      (Semigroup((<>)))
-import           Data.Traversable    (Traversable(traverse))
+import           Data.Traversable    (Traversable(sequenceA, traverse))
 
 import           GHC.Base            (Bool(False,True))
 import           GHC.Err             (errorWithoutStackTrace)
@@ -215,9 +215,7 @@ instance (Ord a, Ord b) => Ord (Either a b) where
 
 instance (Read a, Read b) => Read (Either a b) where
   readPrec
-    = parens
-        (prec
-          10
+    = parens (prec 10
           (do expectP (Ident "Left")
               a <- step readPrec
               return (Left a))
@@ -244,44 +242,42 @@ instance (Show b, Show a) => Show (Either a b) where
   showList = showList__ (showsPrec 0)
 
 instance Functor (Either a) where
-  fmap _ (Left a)  = left a
-  fmap f (Right b) = right (f b)
+  fmap f = either left (right . f)
   {-# INLINE fmap #-}
 
 instance Applicative (Either e) where
   pure = right
   {-# INLINE pure #-} 
-  Left  e <*> _ = left e
-  Right f <*> r = fmap f r
+  ef <*> ex = either left (\f -> fmap f ex) ef
   {-# INLINE (<*>) #-}
 
 instance Monad (Either e) where
   return = right
   {-# INLINE return #-}
-  Left  l >>= _ = left l
-  Right r >>= k = k r
+  ex >>= f = either left f ex 
   {-# INLINE (>>=) #-}
 
 instance Foldable (Either a) where
-    foldMap f e = either (const mempty) f e
-    {-# INLINE foldMap #-}
-    foldr f z e = either (const z) ((flip f) z) e
-    {-# INLINE foldr #-}
-    foldl f z e = either (const z) (f z) e
-    {-# INLINE foldl #-}
-    length = either (const 0) (const 1)
-    {-# INLINE length #-}
-    null = isLeft
-    {-# INLINE null #-}
-    product = either (const 0) id
-    {-# INLINE product #-}
-    sum = either (const 0) id
-    {-# INLINE sum #-}
+  foldMap f e = either (const mempty) f e
+  {-# INLINE foldMap #-}
+  foldr f z e = either (const z) ((flip f) z) e
+  {-# INLINE foldr #-}
+  foldl f z e = either (const z) (f z) e
+  {-# INLINE foldl #-}
+  length = either (const 0) (const 1)
+  {-# INLINE length #-}
+  null = isLeft
+  {-# INLINE null #-}
+  product = either (const 0) id
+  {-# INLINE product #-}
+  sum = either (const 0) id
+  {-# INLINE sum #-}
 
 instance Traversable (Either a) where
-    traverse _ (Left  x) = pure (Left x)
-    traverse f (Right y) = Right <$> f y
-    {-# INLINE traverse #-}
+  sequenceA ea = either (pure . left) (fmap right) ea
+  {-# INLINE sequenceA #-}
+  traverse f ea = either (pure . left) (fmap right . f) ea 
+  {-# INLINE traverse #-}
 
 instance (Eq a) => Eq1 (Either a) where
     liftEq = liftEq2 (==)
@@ -336,8 +332,6 @@ instance Bitraversable Either where
   bitraverse _ g (Right b) = Right <$> g b
 
 instance MonadFix (Either e) where
-    mfix f = let a = f (unRight a) in a
-             where unRight (Right x) = x
-                   unRight (Left  _) = errorWithoutStackTrace "mfix Either: Left"
-
-
+    mfix f
+      = let a = f (fromRight (errorWithoutStackTrace "mfix Either: Left") a)
+        in a
