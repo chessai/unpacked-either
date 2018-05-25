@@ -80,7 +80,7 @@ module Data.Either.Unpacked
 import Prelude
   ()
 
-import           Control.Applicative (Alternative((<|>)), Applicative((<*>), pure))
+import           Control.Applicative (Alternative((<|>)), Applicative((<*>), pure, liftA2))
 
 import           Control.Monad       (Monad(return, (>>=)))
 
@@ -242,6 +242,16 @@ instance (Show b, Show a) => Show (Either a b) where
         ((.)
            (showString "Right ") (showsPrec 11 b))
   showList = showList__ (showsPrec 0)
+
+instance Semigroup b => Semigroup (Either a b) where
+  (<>) = liftA2 (<>)
+  {-# INLINE (<>) #-}
+
+instance Monoid b => Monoid (Either a b) where
+  mempty = pure mempty
+  {-# INLINE mempty #-}
+  mappend = liftA2 mappend
+  {-# INLINE mappend #-}
 
 instance Functor (Either a) where
   fmap f = either left (right . f)
