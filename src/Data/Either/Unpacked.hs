@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
 
--- Copyright © 2018 Daniel Cartwright
+-- Copyright © 2018 chessai
 
 -- Redistribution and use in source and binary forms, with or without
 -- modification, are permitted provided that the following conditions are met:
@@ -13,7 +13,7 @@
 --       disclaimer in the documentation and/or other materials provided
 --       with the distribution.
 -- 
---     * Neither the name of Kyle McKean nor the names of other
+--     * Neither the name of chessai nor the names of other
 --       contributors may be used to endorse or promote products derived
 --       from this software without specific prior written permission.
 -- 
@@ -83,7 +83,6 @@ import Prelude
 import           Control.Applicative (Alternative((<|>)), Applicative((<*>), pure))
 
 import           Control.Monad       (Monad(return, (>>=)))
-import           Control.Monad.Fix   (MonadFix(mfix))
 
 import           Data.Bifoldable (Bifoldable(bifoldMap))
 import           Data.Bifunctor (Bifunctor(bimap))
@@ -94,7 +93,7 @@ import           Data.Foldable
   (Foldable(foldMap, foldr, foldl, length, null, product, sum), foldr')
 
 import           Data.Function       (const, id, flip, (.), ($))
-import           Data.Functor        (Functor(fmap), (<$>))
+import           Data.Functor        (Functor(fmap))
 import           Data.Functor.Classes
   ( Eq1(liftEq)
   , Ord1(liftCompare)
@@ -121,7 +120,6 @@ import           Data.Semigroup      (Semigroup((<>)))
 import           Data.Traversable    (Traversable(sequenceA, traverse))
 
 import           GHC.Base            (Bool(False,True))
-import           GHC.Err             (errorWithoutStackTrace)
 import           GHC.Read            (Read(readPrec), expectP)
 import           GHC.Show            (Show(showsPrec, showList), showString, showParen, showList__)
 
@@ -196,12 +194,14 @@ toBaseEither (Right b) = BaseEither.Right b
 
 --------------------------------------------------------------------------------
 
+-- this is what happens when you can't derive things
 instance (Eq a, Eq b) => Eq (Either a b) where
   Left  a == Left  b = a == b
   Right a == Right b = a == b
   _       == _       = False
   {-# INLINE (==) #-}
 
+-- this is what happens when you can't derive things
 instance (Ord a, Ord b) => Ord (Either a b) where
   compare x y
     = case x of
@@ -213,6 +213,7 @@ instance (Ord a, Ord b) => Ord (Either a b) where
           _       -> GT
   {-# INLINE compare #-}
 
+-- this is what happens when you can't derive things
 instance (Read a, Read b) => Read (Either a b) where
   readPrec
     = parens (prec 10
@@ -228,6 +229,7 @@ instance (Read a, Read b) => Read (Either a b) where
   readList = readListDefault
   readListPrec = readListPrecDefault
 
+-- this is what happens when you can't derive things
 instance (Show b, Show a) => Show (Either a b) where
   showsPrec i (Left a)
     = showParen
@@ -319,19 +321,13 @@ instance Show2 Either where
     liftShowsPrec2 _ _ sp2 _ d (Right x) = showsUnaryWith sp2 "Right" d x
 
 instance Bifunctor Either where
-  bimap f _ (Left  a) = left  (f a)
-  bimap _ g (Right b) = right (g b)
+  bimap f g = either (left . f) (right . g)
   {-# INLINE bimap #-}
 
 instance Bifoldable Either where
-  bifoldMap f _ (Left  a) = f a
-  bifoldMap _ g (Right b) = g b
+  bifoldMap f g = either f g 
+  {-# INLINE bifoldMap #-}
 
 instance Bitraversable Either where
-  bitraverse f _ (Left a)  = Left  <$> f a
-  bitraverse _ g (Right b) = Right <$> g b
-
-instance MonadFix (Either e) where
-    mfix f
-      = let a = f (fromRight (errorWithoutStackTrace "mfix Either: Left") a)
-        in a
+  bitraverse f g = either (fmap left . f) (fmap right . g) 
+  {-# INLINE bitraverse #-}
