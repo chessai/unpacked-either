@@ -43,19 +43,19 @@
 --------------------------------------------------------------------------------
 
 {-| This module is intended to be a drop-in replacement
-    for 'Data.Either'. To shave off pointer chasing, it
+    for base's /Data.Either/. To shave off pointer chasing, it
     uses @'-XUnboxedSums'@ to represent the @'Either'@ type
     as two machine words that are contiguous in memory, without
-    loss of expressiveness that 'Data.Either' provides.
+    loss of expressiveness that /Data.Either/ provides.
 
     This library provides pattern synonyms @'Left'@ and @'Right'@
-    that allow users to pattern match on an Unpacked Either
+    that allow users to pattern match on an unpacked Either
     in a familiar way.
 
-    Functions are also provided for converting an Unpacked Either
+    Functions are also provided for converting an unpacked Either
     to the base library's Either, and vice versa.
 
-    WARNING: This library is in alpha, and the internals
+    This library is in alpha, and the internals
     are likely to change.
 -}
 
@@ -130,6 +130,85 @@ import           Text.ParserCombinators.ReadPrec
 
 --------------------------------------------------------------------------------
 
+{-|
+
+The 'Either' type represents values with two possibilities: a value of
+type @'Either' a b@ is either @'Left' a@ or @'Right' b@.
+
+The 'Either' type is sometimes used to represent a value which is
+either correct or an error; by convention, the 'Left' constructor is
+used to hold an error value and the 'Right' constructor is used to
+hold a correct value (mnemonic: \"right\" also means \"correct\").
+
+==== __Examples__
+
+The type @'Either' 'String' 'Int'@ is the type of values which can be either
+a 'String' or an 'Int'. The 'Left' constructor can be used only on
+'String's, and the 'Right' constructor can be used only on 'Int's:
+
+>>> let s = Left "foo" :: Either String Int
+>>> s
+Left "foo"
+>>> let n = Right 3 :: Either String Int
+>>> n
+Right 3
+>>> :type s
+s :: Either String Int
+>>> :type n
+n :: Either String Int
+
+The 'fmap' from our 'Functor' instance will ignore 'Left' values, but
+will apply the supplied function to values contained in a 'Right':
+
+>>> let s = Left "foo" :: Either String Int
+>>> let n = Right 3 :: Either String Int
+>>> fmap (*2) s
+Left "foo"
+>>> fmap (*2) n
+Right 6
+
+The 'Monad' instance for 'Either' allows us to chain together multiple
+actions which may fail, and fail overall if any of the individual
+steps failed. First we'll write a function that can either parse an
+'Int' from a 'Char', or fail.
+
+>>> import Data.Char ( digitToInt, isDigit )
+>>> :{
+    let parseEither :: Char -> Either String Int
+        parseEither c
+          | isDigit c = Right (digitToInt c)
+          | otherwise = Left "parse error"
+>>> :}
+
+The following should work, since both @\'1\'@ and @\'2\'@ can be
+parsed as 'Int's.
+
+>>> :{
+    let parseMultiple :: Either String Int
+        parseMultiple = do
+          x <- parseEither '1'
+          y <- parseEither '2'
+          return (x + y)
+>>> :}
+
+>>> parseMultiple
+Right 3
+
+But the following should fail overall, since the first operation where
+we attempt to parse @\'m\'@ as an 'Int' will fail:
+
+>>> :{
+    let parseMultiple :: Either String Int
+        parseMultiple = do
+          x <- parseEither 'm'
+          y <- parseEither '2'
+          return (x + y)
+>>> :}
+
+>>> parseMultiple
+Left "parse error"
+
+-}
 data Either a b = Either (# a | b #)
 
 -- | The 'Left' pattern synonym mimics the functionality of base's 'Data.Either.Left' constructor
@@ -321,7 +400,7 @@ fromRight :: b -> Either a b -> b
 fromRight def = either (const def) id
 {-# INLINE fromRight #-}
 
--- | The 'fromBaseEither' function converts base's 'Data.Either.Either' to a
+-- | The 'fromBaseEither' function converts base's 'Data.Either.Either' to an
 --   'Data.Either.Unpacked.Either'. This function is good for using
 --   existing functions that return base's 'Data.Either.Either' values.
 --
@@ -342,6 +421,10 @@ fromBaseEither (BaseEither.Right b) = right b
 
 -- | The 'toBaseEither' function converts an 'Either' value to a
 --   value of base's 'Data.Either.Either' type.
+--
+--   This function is provided for testing an convenience but
+--   it is not an idiomatic use of this library. It ruins the speed and space gains from
+--   unpacking the 'Either'. I implore you to destruct the 'Either' with 'either' instead.
 --
 -- ==== __Examples__
 --
@@ -471,9 +554,9 @@ instance (Show a) => Show1 (Either a) where
     liftShowsPrec = liftShowsPrec2 showsPrec showList
 
 instance Eq2 Either where
-    liftEq2 e1 _ (Left x) (Left y) = e1 x y
-    liftEq2 _ _ (Left _) (Right _) = False
-    liftEq2 _ _ (Right _) (Left _) = False
+    liftEq2 e1 _ (Left  x) (Left  y) = e1 x y
+    liftEq2 _  _ (Left  _) (Right _) = False
+    liftEq2 _  _ (Right _) (Left  _) = False
     liftEq2 _ e2 (Right x) (Right y) = e2 x y
 
 instance Ord2 Either where
